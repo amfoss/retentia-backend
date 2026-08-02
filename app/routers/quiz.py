@@ -8,13 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from google import genai
 from pydantic import ValidationError
 
-from app.crud.quiz_cache import store_quiz
-from app.dependencies import get_current_user
+from app.crud.quiz_cache import store_quiz, get_quiz
+from app.crud.quiz import evaluate_quiz
+from app.dependencies import get_current_user, get_db
 from app.models import User
-from app.schemas.quiz import QuizResponse, QuizQuestion, QuizQuestionSafe, Subject, QUIZ_RESPONSE_SCHEMA
+from app.schemas.quiz import QuizResponse, QuizQuestion, QuizQuestionSafe, Subject, QUIZ_RESPONSE_SCHEMA, SubmitQuiz, SubmitQuizResponse
 
 from app.crud import syllabus as syllabus_crud
-from app.database import get_db
 from app.schemas.syllabus import SubjectOut
 from sqlalchemy.orm import Session
 
@@ -70,7 +70,13 @@ Rules:
         
     try:
         quiz_data = json.loads(response.text)
-        questions = [QuizQuestion(**q) for q in quiz_data]
+
+        questions = []
+        i = 0
+        for q in quiz_data:
+            q["question_id"] = i
+            questions.append(QuizQuestion(**q))
+            i += 1
  
     except json.JSONDecodeError:
         raise HTTPException(
@@ -104,3 +110,22 @@ Rules:
     ]
  
     return QuizResponse(quiz_id=quiz_id, questions=safe_questions)
+
+@router.post("/submit-quiz", response_model=SubmitQuizResponse)
+def submit_quiz(data: SubmitQuiz, current_user: User = Depends(get_current_user),db: Session = Depends(get_db),):
+    
+    user_id = current_user.id
+    quiz_id = data.quiz_id
+    quiz_data = get_quiz(user_id=user_id, quiz_id=quiz_id)
+
+    if quiz_data is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Quiz not found for this user"
+        )
+
+    evaluation, concept_retention = evaluate_quiz(db=db, user_id = user_id,
+                           quiz_data = quiz_data,
+                           user_responses = data.user_responses)
+
+    return SubmitQuizResponse(quiz_id=quiz_id, evaluation=evaluation, concept_retention=concept_retention)

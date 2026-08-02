@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy.orm import relationship
 from .database import Base
 from .enums import Grade
 
@@ -48,3 +49,12 @@ class Concept(Base):
     id = Column(Integer, primary_key=True)
     chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False)
+
+class Retention(Base):
+    __tablename__ = "user_retention"
+    id = Column(Integer, primary_key=True, index=True)
+    retention = Column(Integer, nullable=False)
+    concept_id = Column(Integer, ForeignKey("concepts.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    next_revision_date = Column(DateTime, nullable=False)
+    concept = relationship("Concept")
